@@ -28,11 +28,21 @@ pub struct ChatMessage {
 }
 
 type Users = Arc<RwLock<Vec<User>>>;
-type ConnectedUsers = Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Message>>>>;
+type ConnectedUsers = Arc<RwLock<HashMap<String, mpsc::UnboundedSender<Message>>>>;
 
 #[tokio::main]
 async fn main() {
     let users: Users = Users::default();
+    let connected_users: ConnectedUsers = ConnectedUsers::default();
+
+    // GET /chat -> websocket upgrade
+    let chat = warp::path("chat")
+        .and(warp::ws())
+        .and(with_users(users.clone()))
+        .and(with_connected_users(connected_users.clone()))
+        .map(|ws: warp::ws::Ws, users, connected_users| {
+            ws.on_upgrade(move |socket| user_connected(socket, users, connected_users))
+        });
 
     // post /register
     let register_path = warp::path("register")
@@ -50,11 +60,10 @@ async fn main() {
             warp::reply::json(&*users)
         });
 
-    let routes = register_path.or(users_path);
+    let routes = register_path.or(users_path).or(chat);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
-
 
 async fn register_user(user: User, users: Users) -> Result<impl warp::Reply, warp::Rejection> {
     let mut users = users.write().await;
@@ -69,4 +78,15 @@ async fn register_user(user: User, users: Users) -> Result<impl warp::Reply, war
 
 fn with_users(users: Users) -> impl Filter<Extract = (Users,), Error = std::convert::Infallible> + Clone {
     warp::any().map(move || users.clone())
+}
+
+fn with_connected_users(connected_users: ConnectedUsers) -> impl Filter<Extract = (ConnectedUsers,), Error = std::convert::Infallible> + Clone {
+    warp::any().map(move || connected_users.clone())
+}
+
+async fn user_connected(ws: WebSocket, users: Users, connected_users: ConnectedUsers) {
+    let (user_ws_tx, mut user_ws_rx) = ws.split();
+    let (user_connected_tx, user_connected_rx) = mpsc::unbounded_channel::<Message>();
+
+    print!("User connected {:?}", user_ws_tx);
 }
