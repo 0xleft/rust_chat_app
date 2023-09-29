@@ -35,22 +35,22 @@ async fn main() {
     let users: Users = Users::default();
 
     // post /register
-    let register = warp::path("register")
+    let register_path = warp::path("register")
         .and(warp::post())
         .and(warp::body::json())
-        .and(with_users(users))
+        .and(with_users(users.clone()))
         .and_then(register_user);
 
     // get /users -> all users
-    let users = warp::path("users")
+    let users_path = warp::path("users")
         .and(warp::get())
-        .and(with_users(cloned_users))
-        .map(|users: Users| async move {
-            let out_users = users.read().await;
-            warp::reply::json(&*out_users)
+        .and(with_users(users.clone()))
+        .map(|users: Users| {
+            let users = users.try_read().unwrap();
+            warp::reply::json(&*users)
         });
 
-    let routes = register;
+    let routes = register_path.or(users_path);
 
     warp::serve(routes).run(([127, 0, 0, 1], 3030)).await;
 }
