@@ -71,7 +71,11 @@ async fn main() {
     let ws_to_stdout = {
         rx.for_each(|message| async {
             let data = message.unwrap().into_text().unwrap();
-            println!("{}", data);
+            // parse json
+            let json: serde_json::Value = serde_json::from_str(&data).unwrap();
+            let from = json["from"].as_str().unwrap();
+            let content = json["content"].as_str().unwrap();
+            println!("{}: {}", from, content);
         })
     };
 

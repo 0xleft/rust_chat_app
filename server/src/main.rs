@@ -1,3 +1,4 @@
+use core::borrow;
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -70,7 +71,7 @@ async fn main() {
 async fn register_user(user: User, users: Users) -> Result<impl warp::Reply, warp::Rejection> {
     // check if user exists
     let check_users = users.read().await;
-    let found_user = check_users.iter().find(|&user| user.username == user.username);
+    let found_user = check_users.iter().find(|&_user| _user.username == user.username);
     if found_user.is_some() {
         return Ok("User already exists".to_string());
     }
@@ -121,16 +122,16 @@ async fn user_connected(ws: WebSocket, users: Users, connected_users: ConnectedU
         password: "".to_string(),
     });
 
-    let users = users.write().await;
+    let _users = users.write().await;
     println!("User login: {}:{}", login_message.username, login_message.password);
 
-    let user = users.iter().find(|&user| user.username == login_message.username && user.password == login_message.password);
-    if user.is_none() {
-        println!("User not found");
-        return;
-    }
-    let user = user.unwrap();
+    let user = _users.iter().find(|&user| user.username == login_message.username && user.password == login_message.password).unwrap().clone();
     println!("User logged in {}", user.username);
+
+    let user = User {
+        username: user.username.clone(),
+        password: user.password.clone(),
+    };
 
     // insert user into connected users
     let mut _connected_users = connected_users.write().await;
@@ -139,6 +140,7 @@ async fn user_connected(ws: WebSocket, users: Users, connected_users: ConnectedU
         sender: tx.clone(),
     });
     drop(_connected_users);
+    drop(_users);
 
     while let Some(result) = user_ws_rx.next().await {
         let msg = match result {
@@ -155,7 +157,7 @@ async fn user_connected(ws: WebSocket, users: Users, connected_users: ConnectedU
             content: "".to_string(),
         });
         println!("Message from {} to {}: {}", msg.from, msg.to, msg.content);
-        send_message(user.clone(), msg, connected_users.clone()).await;
+        send_message(&user, msg, connected_users.clone()).await;
     }
     
     // remove user from connected users
