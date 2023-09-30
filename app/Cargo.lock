@@ -22,6 +22,7 @@ name = "app"
 version = "0.1.0"
 dependencies = [
  "futures",
+ "futures-channel",
  "futures-util",
  "reqwest",
  "serde_json",

@@ -149,10 +149,21 @@ async fn user_connected(ws: WebSocket, users: Users, connected_users: ConnectedU
             }
         };
         let msg = String::from_utf8(msg.as_bytes().to_vec()).unwrap();
-        let msg: ChatMessage = serde_json::from_str(&msg).unwrap();
+        let msg: ChatMessage = serde_json::from_str(&msg).unwrap_or(ChatMessage {
+            from: "".to_string(),
+            to: "".to_string(),
+            content: "".to_string(),
+        });
+        println!("Message from {} to {}: {}", msg.from, msg.to, msg.content);
         send_message(user.clone(), msg, connected_users.clone()).await;
     }
-    // TODO: handle disconnect
+    
+    // remove user from connected users
+    println!("User disconnected {}", user.username);
+    let mut _connected_users = connected_users.write().await;
+    let index = _connected_users.iter().position(|user| user.username == user.username).unwrap();
+    _connected_users.remove(index);
+    drop(_connected_users);
 }
 
 async fn send_message(user: &User, mut message: ChatMessage, connected_users: ConnectedUsers) {
